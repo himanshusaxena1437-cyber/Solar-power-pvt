@@ -1,0 +1,341 @@
+{
+  "entities": {
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Global platform limits, payment rates, referral eligibility, and withdrawal rules managed by administrators.",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "dailyPageLimit": { "type": "number" },
+        "perPageReward": { "type": "number" },
+        "referralReward": { "type": "number" },
+        "referralEligibilityPages": { "type": "number" },
+        "minWithdrawal": { "type": "number" },
+        "withdrawalProcessingHours": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "taskTimerSeconds": { "type": "number", "description": "Focus countdown timer duration in seconds per data entry task." },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "companyName",
+        "dailyPageLimit",
+        "perPageReward",
+        "referralReward",
+        "referralEligibilityPages",
+        "minWithdrawal",
+        "withdrawalProcessingHours",
+        "updatedAt"
+      ]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Marks a Firebase Auth UID as a verified Solar Power Pvt. Ltd. administrator.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "grantedAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered operator profile, balances, and masked payout preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userCode": { "type": "string", "minLength": 6, "maxLength": 24, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "mobile": { "type": "string", "minLength": 10, "maxLength": 15, "pattern": "^[0-9+]+$" },
+        "otpVerified": { "type": "boolean" },
+        "referralCode": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "referredByCode": { "type": "string", "minLength": 0, "maxLength": 20 },
+        "referredByUid": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "accountStatus": { "type": "string", "enum": ["active", "suspended"] },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "totalEarnings": { "type": "number" },
+        "taskEarnings": { "type": "number" },
+        "referralEarnings": { "type": "number" },
+        "totalWithdrawn": { "type": "number" },
+        "pendingWithdrawalAmount": { "type": "number" },
+        "verifiedPagesCount": { "type": "number" },
+        "savedUpiId": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "savedBankName": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "savedAccountHolder": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "savedAccountNumberMasked": { "type": "string", "minLength": 0, "maxLength": 30 },
+        "savedIfsc": { "type": "string", "minLength": 0, "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "userCode",
+        "name",
+        "email",
+        "mobile",
+        "otpVerified",
+        "referralCode",
+        "referredByCode",
+        "referredByUid",
+        "accountStatus",
+        "role",
+        "totalEarnings",
+        "taskEarnings",
+        "referralEarnings",
+        "totalWithdrawn",
+        "pendingWithdrawalAmount",
+        "verifiedPagesCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReferralCodeIndex": {
+      "title": "ReferralCodeIndex",
+      "description": "Lookup index mapping referral codes to referrer UID for validation during signup.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "ownerUid", "ownerName", "createdAt"]
+    },
+    "MobileIndex": {
+      "title": "MobileIndex",
+      "description": "Uniqueness registry enforcing one account per verified mobile number.",
+      "type": "object",
+      "properties": {
+        "mobile": { "type": "string", "minLength": 10, "maxLength": 15, "pattern": "^[0-9]+$" },
+        "uid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["mobile", "uid", "createdAt"]
+    },
+    "DataEntryTask": {
+      "title": "DataEntryTask",
+      "description": "Solar operations data entry page containing source document fields for transcription.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Verification",
+            "Reading",
+            "Correction",
+            "Inverter Telemetry",
+            "Customer Billing",
+            "Panel Inspection",
+            "Grid Feed-In",
+            "Subsidy Record"
+          ]
+        },
+        "pageNumber": { "type": "number" },
+        "rewardAmount": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "sourceRecordId": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "sourceCustomerName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "sourceSiteLocation": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "sourceMeterNumber": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "sourceKwhReading": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "sourceBillingDate": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "sourceNotes": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "createdBy": { "type": "string", "minLength": 6, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "category",
+        "pageNumber",
+        "rewardAmount",
+        "isActive",
+        "sourceRecordId",
+        "sourceCustomerName",
+        "sourceSiteLocation",
+        "sourceMeterNumber",
+        "sourceKwhReading",
+        "sourceBillingDate",
+        "sourceNotes",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TaskSubmission": {
+      "title": "TaskSubmission",
+      "description": "Operator submission for a specific data entry task page. ID is deterministic {userId}_{taskId}.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "userCode": { "type": "string", "minLength": 6, "maxLength": 24 },
+        "taskId": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "taskTitle": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "taskCategory": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "pageNumber": { "type": "number" },
+        "dateKey": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "enteredRecordId": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "enteredCustomerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "enteredSiteLocation": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "enteredMeterNumber": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "enteredKwhReading": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "enteredBillingDate": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "rewardAmount": { "type": "number" },
+        "creditedAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Verified", "Rejected"] },
+        "rejectionReason": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "verifiedBy": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "userName",
+        "userCode",
+        "taskId",
+        "taskTitle",
+        "taskCategory",
+        "pageNumber",
+        "dateKey",
+        "enteredRecordId",
+        "enteredCustomerName",
+        "enteredSiteLocation",
+        "enteredMeterNumber",
+        "enteredKwhReading",
+        "enteredBillingDate",
+        "rewardAmount",
+        "creditedAmount",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReferralRecord": {
+      "title": "ReferralRecord",
+      "description": "Tracks referral invitation, eligibility verification, and ₹250 bonus payout.",
+      "type": "object",
+      "properties": {
+        "referrerUid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "referrerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "referralCode": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^[A-Z0-9\\-]+$" },
+        "referredUid": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "referredName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "referredUserCode": { "type": "string", "minLength": 6, "maxLength": 24 },
+        "eligibilityTargetPages": { "type": "number" },
+        "referredVerifiedPages": { "type": "number" },
+        "rewardAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending Eligibility", "Eligible", "Credited", "Rejected"] },
+        "adminNotes": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "referrerUid",
+        "referrerName",
+        "referralCode",
+        "referredUid",
+        "referredName",
+        "referredUserCode",
+        "eligibilityTargetPages",
+        "referredVerifiedPages",
+        "rewardAmount",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "User payout request via UPI or Bank Transfer awaiting admin approval and settlement.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "userCode": { "type": "string", "minLength": 6, "maxLength": 24 },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["UPI", "Bank Transfer"] },
+        "upiId": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "accountHolder": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "bankName": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "accountNumber": { "type": "string", "minLength": 0, "maxLength": 36 },
+        "ifscCode": { "type": "string", "minLength": 0, "maxLength": 20 },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected", "Paid"] },
+        "paymentReference": { "type": "string", "minLength": 0, "maxLength": 100 },
+        "rejectionReason": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "processedBy": { "type": "string", "minLength": 0, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "userName",
+        "userCode",
+        "amount",
+        "method",
+        "accountHolder",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EarningTransaction": {
+      "title": "EarningTransaction",
+      "description": "Immutable financial ledger record created by verified admin actions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["task_credit", "referral_bonus", "withdrawal_paid"] },
+        "amount": { "type": "number" },
+        "description": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "referenceId": { "type": "string", "minLength": 2, "maxLength": 128 },
+        "createdBy": { "type": "string", "minLength": 6, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "amount", "description", "referenceId", "createdBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/AppSettings" },
+      "description": "Platform-wide configuration rules such as daily limit (200), page rate (₹5), referral reward (₹250), and minimum withdrawal (₹100)."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminMarker" },
+      "description": "Admin role grants keyed by Firebase Auth UID."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private operator profiles and verified earning balances keyed by Firebase Auth UID."
+    },
+    "/referralCodes/{code}": {
+      "schema": { "$ref": "#/entities/ReferralCodeIndex" },
+      "description": "Publicly queryable by exact code ID for validating invite codes during signup."
+    },
+    "/mobileRegistry/{mobile}": {
+      "schema": { "$ref": "#/entities/MobileIndex" },
+      "description": "Ensures one registered account per mobile number."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/DataEntryTask" },
+      "description": "Active solar data entry work pages managed by administrators."
+    },
+    "/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/TaskSubmission" },
+      "description": "Operator task submissions keyed deterministically as {userId}_{taskId} to prevent duplicate submissions."
+    },
+    "/referrals/{referralId}": {
+      "schema": { "$ref": "#/entities/ReferralRecord" },
+      "description": "Referral relationships and ₹250 bonus eligibility tracking keyed by referredUid."
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRequest" },
+      "description": "UPI and Bank Transfer payout requests and status history."
+    },
+    "/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/EarningTransaction" },
+      "description": "Audit ledger of verified task credits, referral bonuses, and paid withdrawals."
+    }
+  }
+}

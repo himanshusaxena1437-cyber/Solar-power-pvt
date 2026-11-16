@@ -1,0 +1,489 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core helper primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'himanshusaxena1437@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidAppSettings(data) {
+      return data.keys().hasAll([
+        'companyName', 'dailyPageLimit', 'perPageReward', 'referralReward',
+        'referralEligibilityPages', 'minWithdrawal', 'withdrawalProcessingHours', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'companyName', 'dailyPageLimit', 'perPageReward', 'referralReward',
+        'referralEligibilityPages', 'minWithdrawal', 'withdrawalProcessingHours',
+        'taskTimerSeconds', 'updatedAt'
+      ]) &&
+      data.companyName is string && data.companyName.size() >= 2 && data.companyName.size() <= 100 &&
+      data.dailyPageLimit is number && data.dailyPageLimit >= 1 && data.dailyPageLimit <= 5000 &&
+      data.perPageReward is number && data.perPageReward >= 1 && data.perPageReward <= 1000 &&
+      data.referralReward is number && data.referralReward >= 0 && data.referralReward <= 10000 &&
+      data.referralEligibilityPages is number && data.referralEligibilityPages >= 1 && data.referralEligibilityPages <= 1000 &&
+      data.minWithdrawal is number && data.minWithdrawal >= 10 && data.minWithdrawal <= 10000 &&
+      data.withdrawalProcessingHours is string && data.withdrawalProcessingHours.size() >= 3 && data.withdrawalProcessingHours.size() <= 80 &&
+      (!('taskTimerSeconds' in data) || (data.taskTimerSeconds is number && data.taskTimerSeconds >= 30 && data.taskTimerSeconds <= 3600)) &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAdminMarker(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'grantedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+        data.grantedAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+        'uid', 'userCode', 'name', 'email', 'mobile', 'otpVerified',
+        'referralCode', 'referredByCode', 'referredByUid', 'accountStatus', 'role',
+        'totalEarnings', 'taskEarnings', 'referralEarnings', 'totalWithdrawn',
+        'pendingWithdrawalAmount', 'verifiedPagesCount', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'userCode', 'name', 'email', 'mobile', 'otpVerified',
+        'referralCode', 'referredByCode', 'referredByUid', 'accountStatus', 'role',
+        'totalEarnings', 'taskEarnings', 'referralEarnings', 'totalWithdrawn',
+        'pendingWithdrawalAmount', 'verifiedPagesCount',
+        'savedUpiId', 'savedBankName', 'savedAccountHolder', 'savedAccountNumberMasked', 'savedIfsc',
+        'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.uid) &&
+      data.userCode is string && data.userCode.size() >= 6 && data.userCode.size() <= 24 &&
+      data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+      data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+      data.mobile is string && data.mobile.size() >= 10 && data.mobile.size() <= 15 &&
+      data.otpVerified is bool &&
+      data.referralCode is string && data.referralCode.size() >= 6 && data.referralCode.size() <= 20 &&
+      data.referredByCode is string && data.referredByCode.size() <= 20 &&
+      data.referredByUid is string && data.referredByUid.size() <= 128 &&
+      data.accountStatus in ['active', 'suspended'] &&
+      data.role in ['user', 'admin'] &&
+      data.totalEarnings is number && data.totalEarnings >= 0 &&
+      data.taskEarnings is number && data.taskEarnings >= 0 &&
+      data.referralEarnings is number && data.referralEarnings >= 0 &&
+      data.totalWithdrawn is number && data.totalWithdrawn >= 0 &&
+      data.pendingWithdrawalAmount is number && data.pendingWithdrawalAmount >= 0 &&
+      data.verifiedPagesCount is number && data.verifiedPagesCount >= 0 &&
+      (!('savedUpiId' in data) || (data.savedUpiId is string && data.savedUpiId.size() <= 100)) &&
+      (!('savedBankName' in data) || (data.savedBankName is string && data.savedBankName.size() <= 100)) &&
+      (!('savedAccountHolder' in data) || (data.savedAccountHolder is string && data.savedAccountHolder.size() <= 100)) &&
+      (!('savedAccountNumberMasked' in data) || (data.savedAccountNumberMasked is string && data.savedAccountNumberMasked.size() <= 30)) &&
+      (!('savedIfsc' in data) || (data.savedIfsc is string && data.savedIfsc.size() <= 20)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidReferralCodeIndex(data) {
+      return data.keys().hasAll(['code', 'ownerUid', 'ownerName', 'createdAt']) &&
+        data.keys().hasOnly(['code', 'ownerUid', 'ownerName', 'createdAt']) &&
+        data.code is string && data.code.size() >= 6 && data.code.size() <= 20 &&
+        isValidId(data.ownerUid) &&
+        data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 80 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidMobileIndex(data) {
+      return data.keys().hasAll(['mobile', 'uid', 'createdAt']) &&
+        data.keys().hasOnly(['mobile', 'uid', 'createdAt']) &&
+        data.mobile is string && data.mobile.size() >= 10 && data.mobile.size() <= 15 &&
+        isValidId(data.uid) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidDataEntryTask(data) {
+      return data.keys().hasAll([
+        'title', 'category', 'pageNumber', 'rewardAmount', 'isActive',
+        'sourceRecordId', 'sourceCustomerName', 'sourceSiteLocation',
+        'sourceMeterNumber', 'sourceKwhReading', 'sourceBillingDate',
+        'sourceNotes', 'createdBy', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'title', 'category', 'pageNumber', 'rewardAmount', 'isActive',
+        'sourceRecordId', 'sourceCustomerName', 'sourceSiteLocation',
+        'sourceMeterNumber', 'sourceKwhReading', 'sourceBillingDate',
+        'sourceNotes', 'createdBy', 'createdAt', 'updatedAt'
+      ]) &&
+      data.title is string && data.title.size() >= 3 && data.title.size() <= 140 &&
+      data.category in ['Verification', 'Reading', 'Correction', 'Inverter Telemetry', 'Customer Billing', 'Panel Inspection', 'Grid Feed-In', 'Subsidy Record'] &&
+      data.pageNumber is number && data.pageNumber >= 1 &&
+      data.rewardAmount is number && data.rewardAmount >= 1 && data.rewardAmount <= 1000 &&
+      data.isActive is bool &&
+      data.sourceRecordId is string && data.sourceRecordId.size() >= 2 && data.sourceRecordId.size() <= 60 &&
+      data.sourceCustomerName is string && data.sourceCustomerName.size() >= 2 && data.sourceCustomerName.size() <= 100 &&
+      data.sourceSiteLocation is string && data.sourceSiteLocation.size() >= 2 && data.sourceSiteLocation.size() <= 120 &&
+      data.sourceMeterNumber is string && data.sourceMeterNumber.size() >= 2 && data.sourceMeterNumber.size() <= 60 &&
+      data.sourceKwhReading is string && data.sourceKwhReading.size() >= 1 && data.sourceKwhReading.size() <= 40 &&
+      data.sourceBillingDate is string && data.sourceBillingDate.size() >= 4 && data.sourceBillingDate.size() <= 40 &&
+      data.sourceNotes is string && data.sourceNotes.size() >= 2 && data.sourceNotes.size() <= 300 &&
+      isValidId(data.createdBy) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidTaskSubmission(data) {
+      return data.keys().hasAll([
+        'userId', 'userName', 'userCode', 'taskId', 'taskTitle', 'taskCategory',
+        'pageNumber', 'dateKey', 'enteredRecordId', 'enteredCustomerName',
+        'enteredSiteLocation', 'enteredMeterNumber', 'enteredKwhReading',
+        'enteredBillingDate', 'rewardAmount', 'creditedAmount', 'status',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'userName', 'userCode', 'taskId', 'taskTitle', 'taskCategory',
+        'pageNumber', 'dateKey', 'enteredRecordId', 'enteredCustomerName',
+        'enteredSiteLocation', 'enteredMeterNumber', 'enteredKwhReading',
+        'enteredBillingDate', 'rewardAmount', 'creditedAmount', 'status',
+        'rejectionReason', 'verifiedBy', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.userId) &&
+      data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 80 &&
+      data.userCode is string && data.userCode.size() >= 6 && data.userCode.size() <= 24 &&
+      isValidId(data.taskId) &&
+      data.taskTitle is string && data.taskTitle.size() >= 3 && data.taskTitle.size() <= 140 &&
+      data.taskCategory is string && data.taskCategory.size() >= 2 && data.taskCategory.size() <= 60 &&
+      data.pageNumber is number && data.pageNumber >= 1 &&
+      data.dateKey is string && data.dateKey.size() == 10 && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+      data.enteredRecordId is string && data.enteredRecordId.size() >= 1 && data.enteredRecordId.size() <= 60 &&
+      data.enteredCustomerName is string && data.enteredCustomerName.size() >= 1 && data.enteredCustomerName.size() <= 100 &&
+      data.enteredSiteLocation is string && data.enteredSiteLocation.size() >= 1 && data.enteredSiteLocation.size() <= 120 &&
+      data.enteredMeterNumber is string && data.enteredMeterNumber.size() >= 1 && data.enteredMeterNumber.size() <= 60 &&
+      data.enteredKwhReading is string && data.enteredKwhReading.size() >= 1 && data.enteredKwhReading.size() <= 40 &&
+      data.enteredBillingDate is string && data.enteredBillingDate.size() >= 1 && data.enteredBillingDate.size() <= 40 &&
+      data.rewardAmount is number && data.rewardAmount >= 1 && data.rewardAmount <= 1000 &&
+      data.creditedAmount is number && data.creditedAmount >= 0 && data.creditedAmount <= 1000 &&
+      data.status in ['Pending', 'Verified', 'Rejected'] &&
+      (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 240)) &&
+      (!('verifiedBy' in data) || (data.verifiedBy is string && data.verifiedBy.size() <= 128)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidReferralRecord(data) {
+      return data.keys().hasAll([
+        'referrerUid', 'referrerName', 'referralCode', 'referredUid',
+        'referredName', 'referredUserCode', 'eligibilityTargetPages',
+        'referredVerifiedPages', 'rewardAmount', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'referrerUid', 'referrerName', 'referralCode', 'referredUid',
+        'referredName', 'referredUserCode', 'eligibilityTargetPages',
+        'referredVerifiedPages', 'rewardAmount', 'status', 'adminNotes',
+        'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.referrerUid) &&
+      data.referrerName is string && data.referrerName.size() >= 2 && data.referrerName.size() <= 80 &&
+      data.referralCode is string && data.referralCode.size() >= 6 && data.referralCode.size() <= 20 &&
+      isValidId(data.referredUid) &&
+      data.referredName is string && data.referredName.size() >= 2 && data.referredName.size() <= 80 &&
+      data.referredUserCode is string && data.referredUserCode.size() >= 6 && data.referredUserCode.size() <= 24 &&
+      data.eligibilityTargetPages is number && data.eligibilityTargetPages >= 1 &&
+      data.referredVerifiedPages is number && data.referredVerifiedPages >= 0 &&
+      data.rewardAmount is number && data.rewardAmount >= 0 && data.rewardAmount <= 10000 &&
+      data.status in ['Pending Eligibility', 'Eligible', 'Credited', 'Rejected'] &&
+      (!('adminNotes' in data) || (data.adminNotes is string && data.adminNotes.size() <= 240)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidWithdrawalRequest(data) {
+      return data.keys().hasAll([
+        'userId', 'userName', 'userCode', 'amount', 'method',
+        'accountHolder', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'userName', 'userCode', 'amount', 'method',
+        'upiId', 'accountHolder', 'bankName', 'accountNumber', 'ifscCode',
+        'status', 'paymentReference', 'rejectionReason', 'processedBy',
+        'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.userId) &&
+      data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 80 &&
+      data.userCode is string && data.userCode.size() >= 6 && data.userCode.size() <= 24 &&
+      data.amount is number && data.amount >= 100 && data.amount <= 1000000 &&
+      data.method in ['UPI', 'Bank Transfer'] &&
+      data.accountHolder is string && data.accountHolder.size() >= 2 && data.accountHolder.size() <= 100 &&
+      (!('upiId' in data) || (data.upiId is string && data.upiId.size() <= 100)) &&
+      (!('bankName' in data) || (data.bankName is string && data.bankName.size() <= 100)) &&
+      (!('accountNumber' in data) || (data.accountNumber is string && data.accountNumber.size() <= 36)) &&
+      (!('ifscCode' in data) || (data.ifscCode is string && data.ifscCode.size() <= 20)) &&
+      data.status in ['Pending', 'Approved', 'Rejected', 'Paid'] &&
+      (!('paymentReference' in data) || (data.paymentReference is string && data.paymentReference.size() <= 100)) &&
+      (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 240)) &&
+      (!('processedBy' in data) || (data.processedBy is string && data.processedBy.size() <= 128)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidEarningTransaction(data) {
+      return data.keys().hasAll([
+        'userId', 'type', 'amount', 'description', 'referenceId', 'createdBy', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'userId', 'type', 'amount', 'description', 'referenceId', 'createdBy', 'createdAt'
+      ]) &&
+      isValidId(data.userId) &&
+      data.type in ['task_credit', 'referral_bonus', 'withdrawal_paid'] &&
+      data.amount is number && data.amount >= 0 &&
+      data.description is string && data.description.size() >= 3 && data.description.size() <= 200 &&
+      data.referenceId is string && data.referenceId.size() >= 2 && data.referenceId.size() <= 128 &&
+      isValidId(data.createdBy) &&
+      data.createdAt is timestamp;
+    }
+
+    function hasAtomicWithdrawalReserve(uid, amount) {
+      return getAfter(/databases/$(database)/documents/users/$(uid)).data.pendingWithdrawalAmount ==
+        get(/databases/$(database)/documents/users/$(uid)).data.pendingWithdrawalAmount + amount;
+    }
+
+    // 1. Settings collection
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if false;
+      allow create, update: if isAdmin() && isValidId(settingId) && isValidAppSettings(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // 2. Admins collection
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (adminUid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(adminUid) && isValidAdminMarker(incoming()) && incoming().uid == adminUid && incoming().grantedAt == request.time;
+      allow delete: if isAdmin() && isValidId(adminUid);
+    }
+
+    // 3. Users collection (strict PII isolation)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().role == 'user' &&
+        incoming().accountStatus == 'active' &&
+        incoming().totalEarnings == 0 &&
+        incoming().taskEarnings == 0 &&
+        incoming().referralEarnings == 0 &&
+        incoming().totalWithdrawn == 0 &&
+        incoming().pendingWithdrawalAmount == 0 &&
+        incoming().verifiedPagesCount == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(userId) && isValidUserProfile(incoming()) && (
+        (
+          isAdmin() &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time
+        ) ||
+        (
+          userId == request.auth.uid &&
+          incoming().uid == existing().uid &&
+          incoming().userCode == existing().userCode &&
+          incoming().email == existing().email &&
+          incoming().referralCode == existing().referralCode &&
+          incoming().referredByCode == existing().referredByCode &&
+          incoming().referredByUid == existing().referredByUid &&
+          incoming().role == existing().role &&
+          incoming().accountStatus == existing().accountStatus &&
+          incoming().totalEarnings == existing().totalEarnings &&
+          incoming().taskEarnings == existing().taskEarnings &&
+          incoming().referralEarnings == existing().referralEarnings &&
+          incoming().totalWithdrawn == existing().totalWithdrawn &&
+          incoming().verifiedPagesCount == existing().verifiedPagesCount &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'mobile', 'otpVerified', 'savedUpiId', 'savedBankName',
+                'savedAccountHolder', 'savedAccountNumberMasked', 'savedIfsc', 'updatedAt'
+              ]) &&
+              incoming().pendingWithdrawalAmount == existing().pendingWithdrawalAmount
+            ) ||
+            (
+              existing().accountStatus == 'active' &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['pendingWithdrawalAmount', 'updatedAt']) &&
+              incoming().pendingWithdrawalAmount > existing().pendingWithdrawalAmount &&
+              incoming().pendingWithdrawalAmount <= (existing().totalEarnings - existing().totalWithdrawn)
+            )
+          )
+        )
+      );
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // 4. Referral code lookup index
+    match /referralCodes/{code} {
+      allow get: if isSignedIn() && isValidId(code);
+      allow list: if false;
+      allow create: if isVerifiedUser() &&
+        isValidId(code) &&
+        isValidReferralCodeIndex(incoming()) &&
+        incoming().code == code &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update, delete: if isAdmin() && isValidId(code);
+    }
+
+    // 5. Mobile uniqueness registry
+    match /mobileRegistry/{mobile} {
+      allow get: if isSignedIn() && isValidId(mobile);
+      allow list: if false;
+      allow create: if isVerifiedUser() &&
+        isValidId(mobile) &&
+        isValidMobileIndex(incoming()) &&
+        incoming().mobile == mobile &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update, delete: if isAdmin() && isValidId(mobile);
+    }
+
+    // 6. Data entry tasks
+    match /tasks/{taskId} {
+      allow get: if isSignedIn() && isValidId(taskId);
+      allow list: if isSignedIn();
+      allow create: if isAdmin() &&
+        isValidId(taskId) &&
+        isValidDataEntryTask(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(taskId) &&
+        isValidDataEntryTask(incoming()) &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(taskId);
+    }
+
+    // 7. Task submissions (deterministic ID {userId}_{taskId} prevents duplicates)
+    match /submissions/{submissionId} {
+      allow get: if isSignedIn() && isValidId(submissionId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(submissionId) &&
+        isValidTaskSubmission(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        submissionId == (request.auth.uid + '_' + incoming().taskId) &&
+        incoming().status == 'Pending' &&
+        incoming().creditedAmount == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus == 'active';
+      allow update: if isAdmin() &&
+        isValidId(submissionId) &&
+        isValidTaskSubmission(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().taskId == existing().taskId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(submissionId);
+    }
+
+    // 8. Referrals
+    match /referrals/{referralId} {
+      allow get: if isSignedIn() && isValidId(referralId) && (
+        existing().referrerUid == request.auth.uid ||
+        existing().referredUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.referrerUid == request.auth.uid ||
+        resource.data.referredUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
+        isValidId(referralId) &&
+        isValidReferralRecord(incoming()) &&
+        referralId == request.auth.uid &&
+        incoming().referredUid == request.auth.uid &&
+        incoming().referrerUid != request.auth.uid &&
+        incoming().status == 'Pending Eligibility' &&
+        incoming().referredVerifiedPages == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/referralCodes/$(incoming().referralCode)) &&
+        get(/databases/$(database)/documents/referralCodes/$(incoming().referralCode)).data.ownerUid == incoming().referrerUid;
+      allow update: if isAdmin() &&
+        isValidId(referralId) &&
+        isValidReferralRecord(incoming()) &&
+        incoming().referrerUid == existing().referrerUid &&
+        incoming().referredUid == existing().referredUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(referralId);
+    }
+
+    // 9. Withdrawals
+    match /withdrawals/{withdrawalId} {
+      allow get: if isSignedIn() && isValidId(withdrawalId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(withdrawalId) &&
+        isValidWithdrawalRequest(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'Pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus == 'active' &&
+        hasAtomicWithdrawalReserve(request.auth.uid, incoming().amount);
+      allow update: if isAdmin() &&
+        isValidId(withdrawalId) &&
+        isValidWithdrawalRequest(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().amount == existing().amount &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(withdrawalId);
+    }
+
+    // 10. Transactions ledger
+    match /transactions/{txId} {
+      allow get: if isSignedIn() && isValidId(txId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() &&
+        isValidId(txId) &&
+        isValidEarningTransaction(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(txId);
+    }
+  }
+}

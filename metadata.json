@@ -1,0 +1,6 @@
+{
+  "name": "Solar Power Pvt. Ltd. — Data Entry & Earnings Portal",
+  "description": "Mobile-friendly solar operations data entry platform with verified per-page earnings, referral rewards, UPI/bank withdrawals, and administrative verification console.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
