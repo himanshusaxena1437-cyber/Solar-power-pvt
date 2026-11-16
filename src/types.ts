@@ -148,6 +148,16 @@ export interface EarningTransaction {
   createdAt?: Timestamp;
 }
 
+export interface LeaderboardEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  userCode: string;
+  monthKey: string;
+  approvedCount: number;
+  updatedAt?: Timestamp;
+}
+
 export interface ToastNotice {
   id: string;
   tone: 'success' | 'error' | 'info';

@@ -1,10 +1,12 @@
 import React from 'react';
 import {
   ArrowUpRight,
+  Award,
   CheckCircle2,
   Clock,
   FileSpreadsheet,
   ShieldCheck,
+  Trophy,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -12,9 +14,11 @@ import type {
   ActiveTab,
   AppSettings,
   EarningTransaction,
+  LeaderboardEntry,
   TaskSubmission,
   UserProfile,
 } from '../types';
+import { getCurrentMonthKey, getMonthKeyFromTimestamp } from '../utils/csvExport';
 import { formatINR, formatTimestamp, getTodayDateKey } from '../utils/solarData';
 import { PWAInstallButton } from './PWAInstallControls';
 
@@ -23,6 +27,7 @@ interface DashboardViewProps {
   settings: AppSettings;
   submissions: TaskSubmission[];
   transactions: EarningTransaction[];
+  leaderboardEntries: LeaderboardEntry[];
   onNavigate: (tab: ActiveTab) => void;
 }
 
@@ -31,6 +36,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   settings,
   submissions,
   transactions,
+  leaderboardEntries,
   onNavigate,
 }) => {
   const todayKey = getTodayDateKey();
@@ -50,6 +56,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     Math.round((todaySubmissions.length / Math.max(1, settings.dailyPageLimit)) * 100)
   );
   const maxDailyOpportunity = settings.dailyPageLimit * settings.perPageReward;
+
+  const currentMonthKey = getCurrentMonthKey();
+  const [yrStr, moStr] = currentMonthKey.split('-');
+  const currentMonthLabel = new Date(Number(yrStr), Number(moStr) - 1, 1).toLocaleDateString(
+    'en-IN',
+    { month: 'long', year: 'numeric' }
+  );
+
+  const sortedLeaderboard = [...leaderboardEntries]
+    .filter((entry) => entry.monthKey === currentMonthKey && entry.approvedCount > 0)
+    .sort((a, b) => b.approvedCount - a.approvedCount || a.userName.localeCompare(b.userName));
+  const topFivePerformers = sortedLeaderboard.slice(0, 5);
+  const topScore = topFivePerformers[0]?.approvedCount || 1;
+
+  const myMonthlyApprovedFromSubmissions = submissions.filter((s) => {
+    if (s.status !== 'Verified') return false;
+    const m = getMonthKeyFromTimestamp(s.updatedAt || s.createdAt) || s.dateKey.slice(0, 7);
+    return m === currentMonthKey;
+  }).length;
+  const myLeaderboardIndex = sortedLeaderboard.findIndex((e) => e.userId === profile.uid);
+  const myMonthlyApprovedCount =
+    myLeaderboardIndex >= 0
+      ? sortedLeaderboard[myLeaderboardIndex].approvedCount
+      : myMonthlyApprovedFromSubmissions;
 
   return (
     <div className="space-y-6">
@@ -306,6 +336,115 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Top Performers Section */}
+      <div className="bg-white border border-[#DCE6DE] rounded-xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#EEF3EF]">
+          <div className="flex items-start gap-2.5">
+            <Trophy className="w-5 h-5 text-[#CA8A04] shrink-0 mt-0.5" />
+            <div>
+              <h2 className="font-display text-lg font-semibold text-[#0F1F16]">
+                Top Performers · {currentMonthLabel}
+              </h2>
+              <p className="text-xs text-[#4A5D52] mt-0.5">
+                Top 5 operators ranked by verified and approved task pages this month.
+              </p>
+            </div>
+          </div>
+
+          <div className="text-xs text-left sm:text-right">
+            <span className="text-[#4A5D52] block">Your Monthly Approved</span>
+            <span className="font-mono text-sm font-bold text-[#15803D] tabular-nums">
+              {myMonthlyApprovedCount} {myMonthlyApprovedCount === 1 ? 'page' : 'pages'}
+              {myLeaderboardIndex >= 0 ? ` · Rank #${myLeaderboardIndex + 1}` : ''}
+            </span>
+          </div>
+        </div>
+
+        {topFivePerformers.length === 0 ? (
+          <div className="py-8 text-center space-y-2.5">
+            <Award className="w-7 h-7 text-[#CA8A04] mx-auto" />
+            <p className="text-sm font-medium text-[#0F1F16]">
+              No approved tasks recorded for {currentMonthLabel} yet
+            </p>
+            <p className="text-xs text-[#4A5D52] max-w-md mx-auto">
+              Submit accurate data entry pages and earn admin verification to climb to the #1 spot on this month&apos;s leaderboard.
+            </p>
+            <button
+              type="button"
+              onClick={() => onNavigate('work')}
+              className="mt-1 px-4 py-2 rounded-lg bg-[#15803D] text-white text-xs font-semibold hover:bg-[#166534] transition-colors inline-flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Start Data Entry</span>
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#EEF3EF]">
+            {topFivePerformers.map((entry, idx) => {
+              const rank = idx + 1;
+              const isCurrentUser = entry.userId === profile.uid;
+              const barPct = Math.max(8, Math.round((entry.approvedCount / topScore) * 100));
+              const rankColor =
+                rank === 1
+                  ? 'text-[#B45309]'
+                  : rank <= 3
+                    ? 'text-[#15803D]'
+                    : 'text-[#4A5D52]';
+
+              return (
+                <div
+                  key={entry.id}
+                  className={`py-3.5 px-2 -mx-2 rounded-lg flex items-center justify-between gap-4 text-sm ${
+                    isCurrentUser ? 'bg-[#F0FDF4]' : 'hover:bg-[#F7FAF7]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span
+                      className={`font-mono text-sm font-bold tabular-nums w-8 shrink-0 ${rankColor}`}
+                    >
+                      #{rank}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#0F1F16] truncate">
+                        {entry.userName}
+                        {isCurrentUser && (
+                          <span className="ml-1.5 text-xs font-semibold text-[#15803D]">
+                            (You)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs font-mono text-[#4A5D52]">
+                        {entry.userCode}
+                        {rank === 1 ? ' · Monthly Leader' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="hidden sm:block w-28 h-2 rounded-full bg-[#EEF3EF] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          rank === 1 ? 'bg-[#EAB308]' : 'bg-[#15803D]'
+                        }`}
+                        style={{ width: `${barPct}%` }}
+                      />
+                    </div>
+                    <div className="text-right min-w-[92px]">
+                      <span className="font-mono font-bold text-[#0F1F16] tabular-nums">
+                        {entry.approvedCount}
+                      </span>{' '}
+                      <span className="text-xs text-[#4A5D52]">
+                        {entry.approvedCount === 1 ? 'task' : 'tasks'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

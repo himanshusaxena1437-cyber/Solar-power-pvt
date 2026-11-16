@@ -644,6 +644,31 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
           });
         }
 
+        // Update monthly non-PII leaderboard count
+        const monthKey = getCurrentMonthKey();
+        const lbRef = doc(db, 'leaderboard', `${monthKey}_${sub.userId}`);
+        const lbSnap = await getDoc(lbRef);
+        const existingVerifiedInMonth = allSubmissions.filter((item) => {
+          if (item.userId !== sub.userId || item.status !== 'Verified' || item.id === sub.id) {
+            return false;
+          }
+          const itemMonth =
+            getMonthKeyFromTimestamp(item.updatedAt || item.createdAt) ||
+            item.dateKey.slice(0, 7);
+          return itemMonth === monthKey;
+        }).length;
+        const prevLbCount = lbSnap.exists() ? Number(lbSnap.data().approvedCount || 0) : 0;
+        const nextApprovedCount = Math.max(prevLbCount + 1, existingVerifiedInMonth + 1);
+
+        batch.set(lbRef, {
+          userId: sub.userId,
+          userName: targetUser.name,
+          userCode: targetUser.userCode,
+          monthKey,
+          approvedCount: nextApprovedCount,
+          updatedAt: serverTimestamp(),
+        });
+
         await batch.commit();
         playSuccessChime('approve');
         onNotify('success', 'Submission Verified', `${formatINR(reward)} credited to ${sub.userName}.`);

@@ -44,12 +44,14 @@ import type {
   AppSettings,
   DataEntryTask,
   EarningTransaction,
+  LeaderboardEntry,
   ReferralRecord,
   TaskSubmission,
   ToastNotice,
   UserProfile,
   WithdrawalRequest,
 } from './types';
+import { getCurrentMonthKey, getMonthKeyFromTimestamp } from './utils/csvExport';
 import {
   DEFAULT_APP_SETTINGS,
   SAMPLE_SOLAR_TASKS,
@@ -75,6 +77,7 @@ export default function App() {
   const [allReferrals, setAllReferrals] = useState<ReferralRecord[]>([]);
   const [allWithdrawals, setAllWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [allTransactions, setAllTransactions] = useState<EarningTransaction[]>([]);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
@@ -301,6 +304,23 @@ export default function App() {
       (err) => handleFirestoreError(err, OperationType.LIST, 'transactions')
     );
 
+    const currentMonthKey = getCurrentMonthKey();
+    const unsubLeaderboard = onSnapshot(
+      query(
+        collection(db, 'leaderboard'),
+        where('monthKey', '==', currentMonthKey)
+      ),
+      (snap) => {
+        const items = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<LeaderboardEntry, 'id'>),
+        }));
+        items.sort((a, b) => b.approvedCount - a.approvedCount || a.userName.localeCompare(b.userName));
+        setLeaderboardEntries(items);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'leaderboard')
+    );
+
     return () => {
       unsubSettings();
       unsubTasks();
@@ -308,6 +328,7 @@ export default function App() {
       unsubRefs();
       unsubWithdrawals();
       unsubTx();
+      unsubLeaderboard();
     };
   }, [authReady, firebaseUser, profile?.uid, isAdminUser]);
 
@@ -385,6 +406,65 @@ export default function App() {
       unsubAllTx();
     };
   }, [authReady, firebaseUser, profile?.uid, isAdminUser]);
+
+  // Keep current month's non-PII leaderboard synced when admin views workspace
+  useEffect(() => {
+    if (!authReady || !firebaseUser || !isAdminUser) return;
+    if (allSubmissions.length === 0 || allUsers.length === 0) return;
+
+    const currentMonthKey = getCurrentMonthKey();
+    const countsByUser = new Map<string, number>();
+    allSubmissions.forEach((sub) => {
+      if (sub.status !== 'Verified') return;
+      const subMonth =
+        getMonthKeyFromTimestamp(sub.updatedAt || sub.createdAt) ||
+        sub.dateKey.slice(0, 7);
+      if (subMonth === currentMonthKey) {
+        countsByUser.set(sub.userId, (countsByUser.get(sub.userId) || 0) + 1);
+      }
+    });
+
+    if (countsByUser.size === 0) return;
+
+    const existingByUid = new Map<string, number>();
+    leaderboardEntries.forEach((entry) => {
+      if (entry.monthKey === currentMonthKey) {
+        existingByUid.set(entry.userId, entry.approvedCount);
+      }
+    });
+
+    const userMap = new Map(allUsers.map((u) => [u.uid, u]));
+    const updatesNeeded: { user: UserProfile; count: number }[] = [];
+    countsByUser.forEach((count, uid) => {
+      const user = userMap.get(uid);
+      if (!user) return;
+      if (existingByUid.get(uid) !== count) {
+        updatesNeeded.push({ user, count });
+      }
+    });
+
+    if (updatesNeeded.length === 0) return;
+
+    const syncBatch = async () => {
+      try {
+        const batch = writeBatch(db);
+        updatesNeeded.slice(0, 200).forEach(({ user, count }) => {
+          batch.set(doc(db, 'leaderboard', `${currentMonthKey}_${user.uid}`), {
+            userId: user.uid,
+            userName: user.name,
+            userCode: user.userCode,
+            monthKey: currentMonthKey,
+            approvedCount: count,
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Leaderboard sync skipped:', err);
+      }
+    };
+    void syncBatch();
+  }, [authReady, firebaseUser, isAdminUser, allSubmissions, allUsers, leaderboardEntries]);
 
   if (!authReady || (firebaseUser && !profileChecked)) {
     return (
@@ -523,6 +603,7 @@ export default function App() {
             settings={settings}
             submissions={mySubmissions}
             transactions={myTransactions}
+            leaderboardEntries={leaderboardEntries}
             onNavigate={setActiveTab}
           />
         )}

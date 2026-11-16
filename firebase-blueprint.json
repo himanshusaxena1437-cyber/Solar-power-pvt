@@ -294,6 +294,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "type", "amount", "description", "referenceId", "createdBy", "createdAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Non-PII monthly operator ranking entry storing approved task counts for the Top Performers dashboard.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 6, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "userCode": { "type": "string", "minLength": 6, "maxLength": 24 },
+        "monthKey": { "type": "string", "minLength": 7, "maxLength": 7, "pattern": "^[0-9]{4}-[0-9]{2}$" },
+        "approvedCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "userCode", "monthKey", "approvedCount", "updatedAt"]
     }
   },
   "firestore": {
@@ -336,6 +350,10 @@
     "/transactions/{txId}": {
       "schema": { "$ref": "#/entities/EarningTransaction" },
       "description": "Audit ledger of verified task credits, referral bonuses, and paid withdrawals."
+    },
+    "/leaderboard/{entryId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Monthly non-PII approved task counts keyed as {monthKey}_{userId} for the Dashboard Top Performers section."
     }
   }
 }
